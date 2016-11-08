@@ -1,0 +1,96 @@
+---
+title: ""
+output: html_document
+---
+```{r, include=FALSE}
+library(knitr)
+library(plyr)
+library(dplyr)
+library(data.table)
+
+# Read data into csv 
+mass.shootings <- read.csv("data/Mass-Shooting-Data.csv", stringsAsFactors = FALSE)
+
+# Rename columns and rows
+cols <- names(mass.shootings)
+setnames(mass.shootings, old = cols, new = c('date', 'city', 'state', 'injured', 'killed', 'lat', 'lng'))
+mass.shootings <- mass.shootings[-1,]
+(setattr(mass.shootings, "row.names", c("1":"262")))
+
+# Create summary table 
+shootings.summary <-  summarise(mass.shootings, avg_injured = round(mean(as.numeric(injured)), digit = 1), avg_killed = round(mean(as.numeric(killed)), digit = 1), median_injured = median(as.numeric((injured))), median_killed = median(as.numeric(killed)), total_injured = sum(as.numeric(injured)), total_killed = sum(as.numeric(killed)), num_shootings = n())
+
+shootings.city.summary <- group_by(mass.shootings, city) %>% 
+summarise(avg_injured = round(mean(as.numeric(injured)), digit = 1), avg_killed = round(mean(as.numeric(killed)), digit = 1), median_injured = median(as.numeric((injured))), median_killed = median(as.numeric(killed)), total_injured = sum(as.numeric(injured)), total_killed = sum(as.numeric(killed)))
+
+shootings.state.summary <- group_by(mass.shootings, state) %>% 
+summarise(avg_injured = round(mean(as.numeric(injured)), digit = 1), avg_killed = round(mean(as.numeric(killed)), digit = 1), median_injured = median(as.numeric((injured))), median_killed = median(as.numeric(killed)), total_injured = sum(as.numeric(injured)), total_killed = sum(as.numeric(killed)))
+
+# NOTE: i'm not happy with this ordering....
+mass.shootings[order(as.Date(mass.shootings$date, format="%B/%d/%Y")),]  
+shootings.date.summary <- group_by(mass.shootings, date) %>% 
+summarise(avg_injured = round(mean(as.numeric(injured)), digit = 1), avg_killed = round(mean(as.numeric(killed)), digit = 1), median_injured = median(as.numeric((injured))), median_killed = median(as.numeric(killed)), total_injured = sum(as.numeric(injured)), total_killed = sum(as.numeric(killed)))
+```
+#Mass Shootings in the United States (2016)
+  
+Within the past year along, the number of mass shootings in the United States has increased dramatically. Below are three tables that break down summarizing statistics for different cities, states, and dates. Overall, in 2016 there were **`r shootings.summary$total_injured[1]`** citizens injured and **`r shootings.summary$total_killed[1]`** citizens killed in a total of **`r shootings.summary$num_shootings[1]`** shootings. The average number of injuries per shooting was **`r shootings.summary$avg_injured[1]`** and the average number of deaths per shooting was **`r shootings.summary$avg_killed[1]`**. 
+
+###Mass Shooting Overall Summary
+`r knitr::kable(shootings.summary)` 
+
+### `r mass.shootings$city[183]`, `r mass.shootings$state[183]` Shooting (`r mass.shootings$date[183]`)
+
+![*Arial Image of the Roden's Home*](http://assets.nydailynews.com/polopoly_fs/1.2611131.1461336769!/img/httpImage/image.jpg_gen/derivatives/article_635/article-ohio-0422.jpg)
+
+The Roden family was the victim of this `r mass.shootings$city[183]`, `r mass.shootings$state[183]` shooting on `r mass.shootings$date[183]`. `r mass.shootings$killed[183]` members of said family were murdered "execution style." Officers susepect there may be more than killer. `r mass.shootings$injured[183]` people were injured in this attack. A 4 day old child, 6-month-old and 3-year-old are the only survivors of this attack. Officers did not give a statement about a suspect or motive. Unfortunately, the killer is still at large for this tragedy. To read more, follow this [link](http://www.cnn.com/2016/04/22/us/ohio-shooting-pike-county/). 
+
+```{r, include=FALSE}
+library(plotly)
+df <- read.csv('data/Mass-Shooting-Data.csv')
+df <- mutate(df, total_shooting = killed + injured)
+
+# geo styling
+g <- list(
+  scope = 'usa',
+  projection = list(type = 'albers usa'),
+  showland = TRUE,
+  landcolor = toRGB("gray95"),
+  subunitcolor = toRGB("gray85"),
+  countrycolor = toRGB("gray85"),
+  countrywidth = 0.5,
+  subunitwidth = 0.5
+)
+
+pal <- c("red", "green", "blue")
+
+p <- plot_geo(df, lat = ~lat, lon = ~lng) %>%
+  add_markers(
+    text = ~paste0("Location: ", city, ", ", state,  
+                  '<br>', total_shooting, " people affected", 
+                  '<br>', injured, " injuries<br>", killed, 
+                  " deaths<br>"),
+    color = ~total_shooting, colors = pal, symbol = I("circle"), size = ~total_shooting, hoverinfo = "text"
+  ) %>%
+  colorbar(title = "Total Shootings") %>%
+  layout(
+    title = '2016 US Shootings by City<br>(Hover for breakdown)', geo = g
+  )
+
+reduced.mass.shootings <- select(mass.shootings, state, injured, killed)
+data <- aggregate(reduced.mass.shootings[,c("injured", "killed")], by=list(reduced.mass.shootings$state),"sum") 
+
+q <- plot_ly(data, x = ~Group.1, y = ~injured, type = 'bar', name = 'Total Injuries', marker = list(color = "rgb(250, 0, 0)")) %>%
+  add_trace(y = ~killed, name = 'Total Deaths', marker = list(color = 'rgb(26, 118, 255)')) %>%
+  layout(title = 'Mass Shootings in USA (2016)',
+         xaxis = list(title = 'State'),
+         yaxis = list(title = 'Frequency'),
+         barmode = 'relative')
+```
+###Interactive Map
+Here is a geographical reprsentation of shootings in the United States from the year 2016. The size of the plotted point is proportional to the number of people affected. The color also gives a visual indication of how many people were affected with red being the a lower amount and blue being a higher amount. Click on a city to get more indepth information such as the number of people injured and killed. 
+`r p`
+
+###Interactive Plot
+This stacked bargraph gives you a visual representation of the ratio for deaths to injuries for all shootings broken down by the 36 states with mass shootings. 
+`r q`
+
